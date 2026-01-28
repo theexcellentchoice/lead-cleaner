@@ -9,6 +9,7 @@ st.write("Upload a lead list and clean it for RESimpli, DealMachine, or Email Ou
 
 uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
 
+
 def clean_text(text):
     if pd.isna(text):
         return ""
@@ -16,10 +17,12 @@ def clean_text(text):
     text = re.sub(r"[^\w\s\-#/]", "", text)
     return text.strip()
 
+
 def normalize_email(email):
     if pd.isna(email):
         return ""
     return str(email).strip().lower()
+
 
 def detect_column(columns, keywords):
     for col in columns:
@@ -28,7 +31,10 @@ def detect_column(columns, keywords):
                 return col
     return None
 
+
 if uploaded_file:
+
+    # Read file
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
     else:
@@ -39,13 +45,14 @@ if uploaded_file:
 
     columns = df.columns.tolist()
 
-address_col = detect_column(columns, ["address", "street", "property address", "prop address"])
-city_col = detect_column(columns, ["city", "property city"])
-state_col = detect_column(columns, ["state", "property state"])
-zip_col = detect_column(columns, ["zip", "zip code", "postal"])
-email_col = detect_column(columns, ["email", "e-mail", "email address"])
-first_name_col = detect_column(columns, ["first name", "owner first", "owner 1 first"])
-last_name_col = detect_column(columns, ["last name", "owner last", "owner 1 last"])
+    # Smarter column detection
+    address_col = detect_column(columns, ["address", "street", "property address", "prop address"])
+    city_col = detect_column(columns, ["city", "property city"])
+    state_col = detect_column(columns, ["state", "property state"])
+    zip_col = detect_column(columns, ["zip", "zip code", "postal"])
+    email_col = detect_column(columns, ["email", "e-mail", "email address"])
+    first_name_col = detect_column(columns, ["first name", "owner first", "owner 1 first"])
+    last_name_col = detect_column(columns, ["last name", "owner last", "owner 1 last"])
 
     st.subheader("Detected Columns")
     st.write({
@@ -59,6 +66,7 @@ last_name_col = detect_column(columns, ["last name", "owner last", "owner 1 last
     })
 
     if st.button("Clean Data"):
+
         clean_df = pd.DataFrame()
 
         if address_col:
@@ -75,16 +83,3 @@ last_name_col = detect_column(columns, ["last name", "owner last", "owner 1 last
             clean_df["First Name"] = df[first_name_col].apply(clean_text)
         if last_name_col:
             clean_df["Last Name"] = df[last_name_col].apply(clean_text)
-
-        clean_df = clean_df.drop_duplicates()
-        clean_df = clean_df.replace("", pd.NA).dropna(how="all")
-
-        st.success("Cleaning complete!")
-
-        st.download_button(
-            label="Download Cleaned CSV",
-            data=clean_df.to_csv(index=False),
-            file_name="cleaned_leads.csv",
-            mime="text/csv"
-        )
-
