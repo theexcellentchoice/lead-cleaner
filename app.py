@@ -1,108 +1,117 @@
 import streamlit as st
 import pandas as pd
 import re
+from io import BytesIO
 
-st.set_page_config(page_title="Lead Cleaner", layout="wide")
-st.title("Lead List Cleaning Engine")
+st.set_page_config(page_title="Lead Cleaner Pro", layout="wide")
+st.title("📬 Lead Cleaner Pro")
+st.write("Cleans and standardizes lead data for DealMachine, REsimpli, and email marketing.")
 
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
-
-# ---------- Helper Functions ----------
-
+# =============================
+# COLUMN DETECTION
+# =============================
 def detect_column(columns, keywords):
     for col in columns:
-        for key in keywords:
-            if key.lower() in col.lower():
+        for keyword in keywords:
+            if keyword.lower() in col.lower():
                 return col
     return None
 
-def clean_text(val):
-    if pd.isna(val):
+# =============================
+# BASIC TEXT CLEANING
+# =============================
+def clean_text(text):
+    if pd.isna(text):
         return ""
-    val = str(val)
-    val = re.sub(r'\u00A0', ' ', val)
-    val = re.sub(r'[\x00-\x1F]', '', val)
-    return re.sub(r'\s+', ' ', val).strip()
+    text = str(text)
+    text = text.replace('\u00A0', ' ')  # non-breaking spaces
+    text = re.sub(r'[\x00-\x1F]+', '', text)  # hidden characters
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
-def expand_abbreviations(addr):
+# =============================
+# ADDRESS CLEANING
+# =============================
+def separate_unit(addr):
+    unit_pattern = r'(?:#|Apt|Unit|Suite|Ste|Lot|Fl|Floor|Bldg|Building)\s*[\w-]+'
+    match = re.search(unit_pattern, addr, re.IGNORECASE)
+    if match:
+        unit = match.group()
+        addr = addr.replace(unit, '').strip()
+        return addr, unit
+    return addr, ""
+
+def to_usps_abbreviations(addr):
     replacements = {
-        r'\bSt\b': 'Street',
-        r'\bAve\b': 'Avenue',
-        r'\bRd\b': 'Road',
-        r'\bBlvd\b': 'Boulevard',
-        r'\bDr\b': 'Drive',
-        r'\bLn\b': 'Lane',
-        r'\bCt\b': 'Court',
-        r'\bPl\b': 'Place',
-        r'\bTer\b': 'Terrace',
-        r'\bCir\b': 'Circle',
-        r'\bPkwy\b': 'Parkway',
-        r'\bHwy\b': 'Highway'
+        r'\bStreet\b': 'St', r'\bAvenue\b': 'Ave', r'\bRoad\b': 'Rd',
+        r'\bBoulevard\b': 'Blvd', r'\bDrive\b': 'Dr', r'\bLane\b': 'Ln',
+        r'\bCourt\b': 'Ct', r'\bPlace\b': 'Pl', r'\bTerrace\b': 'Ter',
+        r'\bCircle\b': 'Cir', r'\bParkway\b': 'Pkwy', r'\bHighway\b': 'Hwy'
     }
     for pattern, replacement in replacements.items():
         addr = re.sub(pattern, replacement, addr, flags=re.IGNORECASE)
     return addr
 
-def expand_directions(addr):
+def to_usps_directions(addr):
     directions = {
-        r'\bN\b': 'North',
-        r'\bS\b': 'South',
-        r'\bE\b': 'East',
-        r'\bW\b': 'West',
-        r'\bNE\b': 'Northeast',
-        r'\bNW\b': 'Northwest',
-        r'\bSE\b': 'Southeast',
-        r'\bSW\b': 'Southwest'
+        r'\bNorth\b': 'N', r'\bSouth\b': 'S', r'\bEast\b': 'E', r'\bWest\b': 'W',
+        r'\bNortheast\b': 'NE', r'\bNorthwest\b': 'NW',
+        r'\bSoutheast\b': 'SE', r'\bSouthwest\b': 'SW'
     }
     for pattern, replacement in directions.items():
-        addr = re.sub(pattern, replacement, addr)
+        addr = re.sub(pattern, replacement, addr, flags=re.IGNORECASE)
     return addr
 
 def fix_ordinals(addr):
     return re.sub(r'\b(\d+)(ST|ND|RD|TH)\b', lambda m: m.group(1) + m.group(2).lower(), addr)
 
-def separate_unit(addr):
-    unit_patterns = [
-        r'(.*?)(\s+#\s*\w+)$',
-        r'(.*?)(\s+APT\s*\w+)$',
-        r'(.*?)(\s+UNIT\s*\w+)$',
-        r'(.*?)(\s+SUITE\s*\w+)$',
-        r'(.*?)(\s+LOT\s*\w+)$'
-    ]
-    for pattern in unit_patterns:
-        match = re.search(pattern, addr, re.IGNORECASE)
-        if match:
-            return match.group(1).strip(), match.group(2).strip()
-    return addr, ""
-
 def clean_address(addr):
     addr = clean_text(addr)
-    addr = expand_abbreviations(addr)
-    addr = expand_directions(addr)
-    addr = fix_ordinals(addr)
-    addr = re.sub(r'(\d+)([A-Za-z])\b', r'\1 \2', addr)
-    addr = re.sub(r'[^\w\s#-]', '', addr)
-    addr = re.sub(r'\s+', ' ', addr).strip().title()
-    return addr
+    addr1, addr2 = separate_unit(addr)
+    addr1 = to_usps_directions(addr1)
+    addr1 = to_usps_abbreviations(addr1)
+    addr1 = fix_ordinals(addr1)
+    addr1 = re.sub(r'[^\w\s#-]', '', addr1)
+    addr1 = re.sub(r'\s+', ' ', addr1).strip()
+    return addr1.title(), addr2.title()
 
-# ---------- Processing ----------
+# =============================
+# EMAIL + PHONE CLEANING
+# =============================
+def clean_email(email):
+    email = clean_text(email).lower()
+    email = re.sub(r'\s+', '', email)
+    return email
+
+def clean_phone(phone):
+    phone = re.sub(r'\D', '', str(phone))
+    return phone if len(phone) == 10 else ""
+
+# =============================
+# FILE UPLOAD
+# =============================
+uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file, dtype=str)
-    df = df.applymap(clean_text)
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
+
+    st.subheader("Preview of Uploaded Data")
+    st.dataframe(df.head())
 
     columns = df.columns.tolist()
 
-    st.subheader("Column Names in This File")
-    st.write(columns)
-
-    address_col = detect_column(columns, ["address", "street", "property address"])
+    # Auto detect columns
+    address_col = detect_column(columns, ["address", "property address", "street"])
     city_col = detect_column(columns, ["city"])
     state_col = detect_column(columns, ["state"])
-    zip_col = detect_column(columns, ["zip"])
+    zip_col = detect_column(columns, ["zip", "postal"])
     email_col = detect_column(columns, ["email"])
-    first_name_col = detect_column(columns, ["first"])
-    last_name_col = detect_column(columns, ["last"])
+    phone_col = detect_column(columns, ["phone"])
+    first_name_col = detect_column(columns, ["first name"])
+    last_name_col = detect_column(columns, ["last name"])
 
     st.subheader("Detected Columns")
     st.json({
@@ -111,46 +120,32 @@ if uploaded_file:
         "State": state_col,
         "Zip": zip_col,
         "Email": email_col,
+        "Phone": phone_col,
         "First Name": first_name_col,
         "Last Name": last_name_col
     })
 
-    if address_col and city_col and state_col and zip_col:
+    if st.button("🚀 Run Full Lead Cleaning"):
+        # Clean basic text everywhere
+        df = df.applymap(clean_text)
 
-        df[address_col] = df[address_col].apply(clean_address)
-        df["Address Line 1"], df["Address Line 2"] = zip(*df[address_col].apply(separate_unit))
+        # Address cleaning
+        if address_col:
+            df["Address Line 1"], df["Address Line 2"] = zip(*df[address_col].apply(clean_address))
 
-        df["City"] = df[city_col].str.title()
-        df["State"] = df[state_col].str.upper()
-        df["Zip Code"] = df[zip_col].str.extract(r'(\d{5})', expand=False).fillna("")
-
+        # Email + phone cleaning
         if email_col:
-            df["Email"] = df[email_col].str.lower().str.strip()
-            df = df[df["Email"].str.contains("@", na=False)]
+            df[email_col] = df[email_col].apply(clean_email)
+        if phone_col:
+            df[phone_col] = df[phone_col].apply(clean_phone)
 
-        if first_name_col:
-            df["First Name"] = df[first_name_col].str.title()
-        if last_name_col:
-            df["Last Name"] = df[last_name_col].str.title()
+        # Safe dedupe
+        dedupe_cols = [col for col in [address_col, city_col, state_col, zip_col] if col]
+        if dedupe_cols:
+            df.drop_duplicates(subset=dedupe_cols, inplace=True)
 
-        df.drop_duplicates(subset=["Address Line 1", "City", "State", "Zip Code"], inplace=True)
-        df = df[df["Address Line 1"] != ""]
+        st.success("✅ Cleaning complete!")
 
-        st.success(f"Cleaning complete! {len(df)} leads ready.")
-
-        output_cols = [
-            "First Name", "Last Name", "Email",
-            "Address Line 1", "Address Line 2",
-            "City", "State", "Zip Code"
-        ]
-        final_df = df[[col for col in output_cols if col in df.columns]]
-
-        st.download_button(
-            "Download Cleaned CSV",
-            final_df.to_csv(index=False),
-            "cleaned_leads.csv",
-            "text/csv"
-        )
-
-    else:
-        st.error("Required address columns not detected.")
+        output = BytesIO()
+        df.to_csv(output, index=False)
+        st.download_button("📥 Download Cleaned File", data=output.getvalue(), file_name="cleaned_leads.csv", mime="text/csv")
