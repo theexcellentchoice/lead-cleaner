@@ -39,13 +39,13 @@ if uploaded_file:
 
     columns = df.columns.tolist()
 
-    address_col = detect_column(columns, ["address", "street"])
-    city_col = detect_column(columns, ["city"])
-    state_col = detect_column(columns, ["state"])
-    zip_col = detect_column(columns, ["zip"])
-    email_col = detect_column(columns, ["email"])
-    first_name_col = detect_column(columns, ["first"])
-    last_name_col = detect_column(columns, ["last"])
+address_col = detect_column(columns, ["address", "street", "property address", "prop address"])
+city_col = detect_column(columns, ["city", "property city"])
+state_col = detect_column(columns, ["state", "property state"])
+zip_col = detect_column(columns, ["zip", "zip code", "postal"])
+email_col = detect_column(columns, ["email", "e-mail", "email address"])
+first_name_col = detect_column(columns, ["first name", "owner first", "owner 1 first"])
+last_name_col = detect_column(columns, ["last name", "owner last", "owner 1 last"])
 
     st.subheader("Detected Columns")
     st.write({
